@@ -1,10 +1,15 @@
 import { Playground } from './components/Playground';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './contexts/ToastContext';
+import { ToastContainer } from './components/ui/ToastContainer';
 
 function App() {
   return (
     <ErrorBoundary>
-      <Playground />
+      <ToastProvider>
+        <Playground />
+        <ToastContainer />
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

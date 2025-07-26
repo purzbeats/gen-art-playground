@@ -12,6 +12,8 @@ A deterministic seed-based generative art playground built with React, supportin
 - **Parameter Controls**: Add interactive controls with simple annotations
 - **Export Capabilities**: Share projects and configurations
 
+<img width="1905" height="979" alt="image" src="https://github.com/user-attachments/assets/7c59922b-9c99-4a77-bb07-100c777b2db0" />
+
 ## Getting Started
 
 ### Installation

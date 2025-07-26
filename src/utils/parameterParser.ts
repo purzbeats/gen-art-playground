@@ -2,7 +2,7 @@ import type { ProjectParameter } from '../types';
 
 export interface ParsedParameter {
   name: string;
-  type: 'number' | 'boolean' | 'color' | 'select';
+  type: 'number' | 'boolean' | 'color' | 'select' | 'vector2' | 'vector3' | 'range';
   defaultValue: number | boolean | string;
   min?: number;
   max?: number;
@@ -19,9 +19,12 @@ export interface ParsedParameter {
  * @param {boolean} name - description
  * @param {color} name - description [default=#ff0000]
  * @param {select} name - description [options=red,blue,green]
+ * @param {vector2} name - description [default=0,0, step=0.1]
+ * @param {vector3} name - description [default=0,0,0, step=0.1]  
+ * @param {range} name - description [default=0,100, step=1]
  */
 export function parseParametersFromCode(code: string): ParsedParameter[] {
-  const paramRegex = /@param\s+\{(number|boolean|color|select)\}\s+(\w+)(?:\s*-\s*([^[\n]+))?(?:\s*\[([^\]]+)\])?/g;
+  const paramRegex = /@param\s+\{(number|boolean|color|select|vector2|vector3|range)\}\s+(\w+)(?:\s*-\s*([^[\n]+))?(?:\s*\[([^\]]+)\])?/g;
   const parameters: ParsedParameter[] = [];
   
   let match;
@@ -30,8 +33,8 @@ export function parseParametersFromCode(code: string): ParsedParameter[] {
     
     const param: ParsedParameter = {
       name,
-      type: type as 'number' | 'boolean' | 'color' | 'select',
-      defaultValue: getDefaultValue(type as 'number' | 'boolean' | 'color' | 'select'),
+      type: type as 'number' | 'boolean' | 'color' | 'select' | 'vector2' | 'vector3' | 'range',
+      defaultValue: getDefaultValue(type as 'number' | 'boolean' | 'color' | 'select' | 'vector2' | 'vector3' | 'range'),
       description: description?.trim()
     };
     
@@ -56,6 +59,12 @@ function getDefaultValue(type: string): number | boolean | string {
       return '#000000';
     case 'select':
       return '';
+    case 'vector2':
+      return '0, 0';
+    case 'vector3':
+      return '0, 0, 0';
+    case 'range':
+      return '0, 100';
     default:
       return 0;
   }
@@ -120,9 +129,23 @@ export function injectParametersIntoCode(code: string, parameters: ProjectParame
   
   // For each parameter, find and replace const/let/var declarations
   parameters.forEach(param => {
-    const value = param.type === 'color' || param.type === 'select' 
-      ? `"${param.value}"` 
-      : param.value;
+    let value: string;
+    
+    switch (param.type) {
+      case 'color':
+      case 'select':
+        value = `"${param.value}"`;
+        break;
+      case 'vector2':
+      case 'vector3':
+      case 'range':
+        // For vector and range types, inject as array
+        const components = String(param.value).split(',').map(v => v.trim());
+        value = `[${components.join(', ')}]`;
+        break;
+      default:
+        value = String(param.value);
+    }
     
     // Match variable declarations like: const paramName = anything;
     const varRegex = new RegExp(`((?:const|let|var)\\s+${param.name}\\s*=\\s*)[^;\\n]+`, 'g');

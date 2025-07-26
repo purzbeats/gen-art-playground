@@ -4,6 +4,7 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
+import { VirtualScrollList } from './ui/VirtualScrollList';
 import { getPlaceholderThumbnail } from '../utils/thumbnailUtils';
 import { useToast } from '../contexts/ToastContext';
 import type { Project } from '../types';
@@ -82,6 +83,94 @@ export const ProjectBrowser: React.FC<ProjectBrowserProps> = ({ isOpen, onClose 
     });
   };
 
+  // ProjectCard component for reuse
+  const ProjectCard: React.FC<{
+    project: Project;
+    isCurrentProject: boolean;
+    isSelected: boolean;
+    onSelect: () => void;
+    onLoad: () => void;
+    onDuplicate: () => void;
+    onDelete: () => void;
+    formatDate: (date: Date) => string;
+  }> = ({ project, isCurrentProject, isSelected, onSelect, onLoad, onDuplicate, onDelete, formatDate }) => (
+    <div
+      className={`group relative border rounded-lg overflow-hidden cursor-pointer transition-all hover:shadow-lg ${
+        isCurrentProject ? 'ring-2 ring-blue-500' : 'border-gray-200'
+      } ${isSelected ? 'ring-2 ring-blue-300' : ''}`}
+      onClick={onSelect}
+      onDoubleClick={onLoad}
+    >
+      {/* Thumbnail */}
+      <div className="aspect-video bg-gray-100 relative overflow-hidden">
+        <img
+          src={project.thumbnail || getPlaceholderThumbnail(project.type)}
+          alt={project.name}
+          className="w-full h-full object-cover"
+        />
+        {isCurrentProject && (
+          <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+            Current
+          </div>
+        )}
+      </div>
+
+      {/* Project info */}
+      <div className="p-4">
+        <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
+        <div className="flex items-center justify-between mt-1">
+          <span className={`text-xs px-2 py-1 rounded ${
+            project.type === 'p5' 
+              ? 'bg-blue-100 text-blue-800' 
+              : 'bg-green-100 text-green-800'
+          }`}>
+            {project.type}
+          </span>
+          <span className="text-xs text-gray-500">
+            {formatDate(project.updatedAt)}
+          </span>
+        </div>
+      </div>
+
+      {/* Actions overlay */}
+      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center opacity-0 group-hover:opacity-100">
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onLoad();
+            }}
+          >
+            Open
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+          >
+            Duplicate
+          </Button>
+          {!isCurrentProject && (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              Delete
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
@@ -129,85 +218,43 @@ export const ProjectBrowser: React.FC<ProjectBrowserProps> = ({ isOpen, onClose 
             {searchQuery ? 'Try adjusting your search criteria' : 'Create your first project to get started'}
           </p>
         </div>
+      ) : filteredAndSortedProjects.length > 20 ? (
+        // Use virtual scrolling for large lists
+        <VirtualScrollList
+          items={filteredAndSortedProjects}
+          itemHeight={200}
+          containerHeight={400}
+          className="pr-2"
+          renderItem={(project) => (
+            <div className="px-1 pb-4">
+              <ProjectCard
+                project={project}
+                isCurrentProject={currentProject?.id === project.id}
+                isSelected={selectedProject === project.id}
+                onSelect={() => setSelectedProject(project.id)}
+                onLoad={() => handleLoadProject(project)}
+                onDuplicate={() => handleDuplicateProject(project)}
+                onDelete={() => handleDeleteProject(project)}
+                formatDate={formatDate}
+              />
+            </div>
+          )}
+        />
       ) : (
+        // Regular grid for smaller lists
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2">
           {filteredAndSortedProjects.map((project) => (
-            <div
+            <ProjectCard
               key={project.id}
-              className={`group relative border rounded-lg overflow-hidden cursor-pointer transition-all hover:shadow-lg ${
-                currentProject?.id === project.id ? 'ring-2 ring-blue-500' : 'border-gray-200'
-              } ${selectedProject === project.id ? 'ring-2 ring-blue-300' : ''}`}
-              onClick={() => setSelectedProject(project.id)}
-              onDoubleClick={() => handleLoadProject(project)}
-            >
-              {/* Thumbnail */}
-              <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                <img
-                  src={project.thumbnail || getPlaceholderThumbnail(project.type)}
-                  alt={project.name}
-                  className="w-full h-full object-cover"
-                />
-                {currentProject?.id === project.id && (
-                  <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                    Current
-                  </div>
-                )}
-              </div>
-
-              {/* Project info */}
-              <div className="p-4">
-                <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
-                <div className="flex items-center justify-between mt-1">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    project.type === 'p5' 
-                      ? 'bg-blue-100 text-blue-800' 
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                    {project.type}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {formatDate(project.updatedAt)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions overlay */}
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLoadProject(project);
-                    }}
-                  >
-                    Open
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDuplicateProject(project);
-                    }}
-                  >
-                    Duplicate
-                  </Button>
-                  {currentProject?.id !== project.id && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteProject(project);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
+              project={project}
+              isCurrentProject={currentProject?.id === project.id}
+              isSelected={selectedProject === project.id}
+              onSelect={() => setSelectedProject(project.id)}
+              onLoad={() => handleLoadProject(project)}
+              onDuplicate={() => handleDuplicateProject(project)}
+              onDelete={() => handleDeleteProject(project)}
+              formatDate={formatDate}
+            />
           ))}
         </div>
       )}

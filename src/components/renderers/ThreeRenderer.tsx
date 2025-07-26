@@ -24,6 +24,9 @@ export const ThreeRenderer: React.FC<ThreeRendererProps> = ({
   const cameraRef = useRef<THREE.Camera | null>(null);
   const animationIdRef = useRef<number | null>(null);
   const cleanupFnRef = useRef<(() => void) | null>(null);
+  const lastFrameTimeRef = useRef<number>(0);
+  const frameCountRef = useRef<number>(0);
+  const fpsRef = useRef<number>(60);
 
   const createThreeScene = useCallback(() => {
     if (!containerRef.current) return;
@@ -44,13 +47,27 @@ export const ThreeRenderer: React.FC<ThreeRendererProps> = ({
         cancelAnimationFrame(animationIdRef.current);
       }
 
-      // Create renderer
+      // Create renderer with WebGL optimizations
       const renderer = new THREE.WebGLRenderer({ 
         antialias: true,
-        preserveDrawingBuffer: config.preserveDrawingBuffer || false
+        preserveDrawingBuffer: config.preserveDrawingBuffer || false,
+        powerPreference: 'high-performance',
+        stencil: false,
+        depth: true
       });
+      
+      // WebGL performance optimizations
       renderer.setSize(config.width, config.height);
-      renderer.setPixelRatio(config.pixelDensity || window.devicePixelRatio);
+      renderer.setPixelRatio(Math.min(config.pixelDensity || window.devicePixelRatio, 2)); // Cap at 2x for performance
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1;
+      
+      // Enable frustum culling and occlusion culling
+      renderer.sortObjects = true;
+      
+      // Memory management
+      renderer.info.autoReset = false;
       
       // Create scene
       const scene = new THREE.Scene();
@@ -73,19 +90,45 @@ export const ThreeRenderer: React.FC<ThreeRendererProps> = ({
       sceneRef.current = scene;
       cameraRef.current = camera;
 
+
       // Call user's sketch function
       const cleanup = sketch(scene, camera, renderer);
       if (typeof cleanup === 'function') {
         cleanupFnRef.current = cleanup;
       }
 
-      // Start render loop
-      const animate = () => {
-        resetGlobalRNG(); // Reset RNG for each frame
-        renderer.render(scene, camera);
+      // Start optimized render loop with frame rate limiting
+      const targetFPS = 60;
+      const frameInterval = 1000 / targetFPS;
+      
+      const animate = (currentTime: number) => {
+        const deltaTime = currentTime - lastFrameTimeRef.current;
+        
+        if (deltaTime >= frameInterval) {
+          // FPS monitoring (less frequent to reduce overhead)
+          frameCountRef.current++;
+          if (frameCountRef.current % 120 === 0) {
+            fpsRef.current = Math.round(1000 / deltaTime);
+            if (fpsRef.current < 30) {
+              console.warn(`Three.js renderer FPS dropped to ${fpsRef.current}`);
+            }
+          }
+          
+          // Reset memory info counter
+          renderer.info.reset();
+          
+          resetGlobalRNG(); // Reset RNG for each frame
+          
+          renderer.render(scene, camera);
+          
+          lastFrameTimeRef.current = currentTime;
+        }
+        
         animationIdRef.current = requestAnimationFrame(animate);
       };
-      animate();
+      
+      lastFrameTimeRef.current = performance.now();
+      animate(lastFrameTimeRef.current);
 
     } catch (error) {
       console.error('Three.js Sketch Error:', error);

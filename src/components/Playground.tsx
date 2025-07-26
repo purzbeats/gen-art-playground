@@ -7,6 +7,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ParameterPanel } from './ParameterPanel';
 import { ExportPanel } from './ExportPanel';
 import { TemplateBrowser } from './TemplateBrowser';
+import { AnimationPanel } from './AnimationPanel';
 import { CreateProjectModal } from './CreateProjectModal';
 import { ProjectBrowser } from './ProjectBrowser';
 import { LoadingSpinner } from './ui/LoadingSpinner';
@@ -15,15 +16,24 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useToast } from '../contexts/ToastContext';
 import * as THREE from 'three';
 
-// Lazy load heavy components
+// Enhanced lazy loading with preloading
+import { preloadModule, logBundleInfo } from '../utils/lazyLoadingUtils';
+
 const Editor = lazy(() => import('@monaco-editor/react'));
 const P5Renderer = lazy(() => import('./renderers/P5Renderer').then(module => ({ default: module.P5Renderer })));
 const ThreeRenderer = lazy(() => import('./renderers/ThreeRenderer').then(module => ({ default: module.ThreeRenderer })));
+
+// Preload critical dependencies
+preloadModule(() => import('@monaco-editor/react'), 'monaco-editor');
+preloadModule(() => import('three'), 'three-js');
+preloadModule(() => import('p5'), 'p5-js');
 
 // Import RNG functions and context
 import { createRNGExecutionContext } from '../utils/rngHelpers';
 import { injectParametersIntoCode } from '../utils/parameterParser';
 import { formatError } from '../utils/errorUtils';
+import { createCompletionProvider, createHoverProvider } from '../utils/monacoCompletions';
+import { parseErrorMessage, validateCode, createMarkersFromErrors, createDiagnosticProvider } from '../utils/monacoErrorDiagnostics';
 
 export const Playground: React.FC = () => {
   const [isTemplateBrowserOpen, setIsTemplateBrowserOpen] = useState(false);
@@ -53,6 +63,11 @@ export const Playground: React.FC = () => {
   // Check for URL imports on component mount
   useEffect(() => {
     importFromURL();
+    
+    // Log bundle info in development
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+      setTimeout(logBundleInfo, 3000);
+    }
   }, [importFromURL]);
 
   // Capture thumbnail on render
@@ -84,7 +99,7 @@ export const Playground: React.FC = () => {
     }
   });
 
-  // Compile user code safely
+  // Compile user code safely with parameters injected directly
   const compiledSketch = useMemo(() => {
     if (!currentProject) return null;
 
@@ -112,8 +127,9 @@ export const Playground: React.FC = () => {
           };
         `;
         
-        return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', wrappedCode)(
-          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle
+        return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', 'animateTime', 'animateFrame', 'animateValue', 'animateSin', 'animateCos', wrappedCode)(
+          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle,
+          rngContext.animateTime, rngContext.animateFrame, rngContext.animateValue, rngContext.animateSin, rngContext.animateCos
         );
       } else {
         // For three.js, we return the setup function directly
@@ -127,8 +143,9 @@ export const Playground: React.FC = () => {
           }
         `;
         
-        return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', 'THREE', wrappedCode)(
-          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle, THREE
+        return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', 'animateTime', 'animateFrame', 'animateValue', 'animateSin', 'animateCos', 'THREE', wrappedCode)(
+          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle,
+          rngContext.animateTime, rngContext.animateFrame, rngContext.animateValue, rngContext.animateSin, rngContext.animateCos, THREE
         );
       }
     } catch (error) {
@@ -143,6 +160,99 @@ export const Playground: React.FC = () => {
 
   const handleCreateProject = () => {
     setIsCreateProjectModalOpen(true);
+  };
+
+  // Monaco editor configuration
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    if (!currentProject) return;
+
+    // Register custom completion provider
+    const completionProvider = monaco.languages.registerCompletionItemProvider('javascript', 
+      createCompletionProvider(monaco, currentProject.type)
+    );
+
+    // Register hover provider
+    const hoverProvider = monaco.languages.registerHoverProvider('javascript',
+      createHoverProvider(monaco, currentProject.type)
+    );
+
+    // Register code action provider for error fixes
+    const codeActionProvider = monaco.languages.registerCodeActionProvider('javascript',
+      createDiagnosticProvider(monaco, currentProject.type)
+    );
+
+    // Store providers for cleanup
+    editor._completionProvider = completionProvider;
+    editor._hoverProvider = hoverProvider;
+    editor._codeActionProvider = codeActionProvider;
+
+    // Enhanced JavaScript configuration
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ES2020,
+      allowNonTsExtensions: true,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      module: monaco.languages.typescript.ModuleKind.CommonJS,
+      noEmit: true,
+      esModuleInterop: true,
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      allowJs: true,
+      typeRoots: ['node_modules/@types']
+    });
+
+    // Add custom type definitions
+    const customTypes = `
+      declare function random(): number;
+      declare function randomRange(min: number, max: number): number;
+      declare function randomInt(min: number, max: number): number;
+      declare function choice<T>(array: T[]): T;
+      declare function shuffle<T>(array: T[]): T[];
+      declare function animateTime(): number;
+      declare function animateFrame(): number;
+      declare function animateValue(start: number, end: number): number;
+      declare function animateSin(frequency?: number, amplitude?: number, offset?: number): number;
+      declare function animateCos(frequency?: number, amplitude?: number, offset?: number): number;
+    `;
+
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(
+      customTypes,
+      'playground-types.d.ts'
+    );
+
+    // Set up live error checking
+    const updateDiagnostics = () => {
+      const model = editor.getModel();
+      if (!model) return;
+
+      const code = model.getValue();
+      
+      // Validate code for common issues
+      const codeErrors = validateCode(code, currentProject.type);
+      
+      // Parse runtime errors if available
+      const runtimeErrors = currentError ? parseErrorMessage(currentError) : [];
+      
+      // Combine all errors
+      const allErrors = [...codeErrors, ...runtimeErrors];
+      
+      // Create markers
+      const markers = createMarkersFromErrors(monaco, model, allErrors);
+      
+      // Set markers on the model
+      monaco.editor.setModelMarkers(model, 'playground', markers);
+    };
+
+    // Update diagnostics on code change
+    const disposable = editor.onDidChangeModelContent(() => {
+      // Debounce diagnostics updates
+      clearTimeout(editor._diagnosticsTimeout);
+      editor._diagnosticsTimeout = setTimeout(updateDiagnostics, 500);
+    });
+
+    // Initial diagnostics
+    updateDiagnostics();
+
+    // Store disposable for cleanup
+    editor._diagnosticsDisposable = disposable;
   };
 
   return (
@@ -215,6 +325,7 @@ export const Playground: React.FC = () => {
                     defaultLanguage="javascript"
                     value={currentProject.code}
                     onChange={(value) => value && updateCode(value)}
+                    onMount={handleEditorDidMount}
                     theme="vs-light"
                     options={{
                       minimap: { enabled: false },
@@ -222,7 +333,14 @@ export const Playground: React.FC = () => {
                       lineNumbers: 'on',
                       roundedSelection: false,
                       scrollBeyondLastLine: false,
-                      automaticLayout: true
+                      automaticLayout: true,
+                      suggestOnTriggerCharacters: true,
+                      quickSuggestions: true,
+                      wordBasedSuggestions: 'allDocuments',
+                      parameterHints: { enabled: true },
+                      acceptSuggestionOnEnter: 'on',
+                      tabCompletion: 'on',
+                      snippetSuggestions: 'top'
                     }}
                   />
                 </Suspense>
@@ -241,6 +359,7 @@ export const Playground: React.FC = () => {
             {currentProject && (
               <div className="flex items-center gap-2 relative">
                 <ParameterPanel />
+                <AnimationPanel />
                 <ExportPanel />
                 <Input
                   value={currentProject.seed}

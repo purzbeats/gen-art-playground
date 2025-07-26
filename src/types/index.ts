@@ -17,15 +17,40 @@ export interface Project {
   seed: string;
   parameters: ProjectParameter[];
   thumbnail?: string;
+  isAnimated?: boolean;
+  animationSettings?: AnimationSettings;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface AnimationSettings {
+  fps: number;
+  duration: number; // in seconds
+  loop: boolean;
+  easing: EasingFunction;
+}
+
+export type EasingFunction = 
+  | 'linear'
+  | 'easeInQuad'
+  | 'easeOutQuad'
+  | 'easeInOutQuad'
+  | 'easeInCubic'
+  | 'easeOutCubic'
+  | 'easeInOutCubic'
+  | 'easeInQuart'
+  | 'easeOutQuart'
+  | 'easeInOutQuart'
+  | 'easeInBack'
+  | 'easeOutBack'
+  | 'easeInOutBack'
+  | 'bounce';
 
 export type ParameterValue = number | boolean | string;
 
 export interface ProjectParameter {
   name: string;
-  type: 'number' | 'boolean' | 'color' | 'select';
+  type: 'number' | 'boolean' | 'color' | 'select' | 'vector2' | 'vector3' | 'range';
   value: ParameterValue;
   min?: number;
   max?: number;

@@ -21,6 +21,9 @@ export const P5Renderer: React.FC<P5RendererProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const p5InstanceRef = useRef<p5 | null>(null);
   const sketchRef = useRef(sketch);
+  const frameCountRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(0);
+  const fpsRef = useRef<number>(60);
 
   // Update sketch ref when sketch changes
   sketchRef.current = sketch;
@@ -31,26 +34,51 @@ export const P5Renderer: React.FC<P5RendererProps> = ({
       setGlobalSeed(seed);
       resetGlobalRNG();
 
-      // Setup canvas
+
+      // Setup canvas with optimizations
       p.setup = () => {
         p.createCanvas(config.width, config.height);
-        if (config.pixelDensity) {
-          p.pixelDensity(config.pixelDensity);
+        
+        // Optimize pixel density for performance
+        const pixelDensity = Math.min(config.pixelDensity || p.pixelDensity(), 2);
+        p.pixelDensity(pixelDensity);
+        
+        // Enable WebGL context if supported (with type safety)
+        const renderer = (p as any)._renderer;
+        if (renderer?.drawingContext?.getParameter) {
+          console.log('P5 WebGL context available');
         }
         
-        // Call user's setup if it exists
+        // Call user's setup
         if (sketchRef.current && typeof sketchRef.current === 'function') {
           sketchRef.current(p);
         }
+        
+        lastFrameTimeRef.current = p.millis();
       };
 
-      // Override draw to reset RNG on each frame for consistency
+      // Override draw with performance monitoring and RNG injection
       const originalDraw = p.draw;
       p.draw = () => {
+        const currentTime = p.millis();
+        const deltaTime = currentTime - lastFrameTimeRef.current;
+        
+        // FPS monitoring (less frequent to reduce overhead)
+        frameCountRef.current++;
+        if (frameCountRef.current % 120 === 0) {
+          fpsRef.current = Math.round(1000 / deltaTime);
+          if (fpsRef.current < 30) {
+            console.warn(`P5 renderer FPS dropped to ${fpsRef.current}`);
+          }
+        }
+        
         resetGlobalRNG();
+        
         if (originalDraw) {
           originalDraw();
         }
+        
+        lastFrameTimeRef.current = currentTime;
       };
 
     } catch (error) {

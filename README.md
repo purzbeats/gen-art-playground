@@ -43,6 +43,13 @@ randomRange(min, max)       // Random float in range
 randomInt(min, max)         // Random integer in range
 choice(array)              // Pick random item from array
 shuffle(array)             // Randomly shuffle array copy
+
+// Animation functions (new in Phase 4)
+animateTime()              // Current animation time [0, 1]
+animateFrame()             // Current animation frame number
+animateValue(start, end)   // Animate between two values
+animateSin(freq, amp, off) // Animated sine wave
+animateCos(freq, amp, off) // Animated cosine wave
 ```
 
 ## p5.js Example
@@ -145,14 +152,39 @@ npm run preview
 
 ## Future Enhancements
 
-- Parameter annotation system (@param comments)
-- Animation/GIF export
-- Gallery of community creations
-- URL-based project sharing
-- Advanced parameter controls (sliders, color pickers)
+- Community gallery of shared creations
+- Project versioning and fork/remix functionality
+- User authentication and profiles
 - Plugin system for custom utilities
+- Advanced collaboration features
 
 ## Changelog
+
+### Phase 4: Advanced Features (v1.4.0)
+- **Animation System**:
+  - Timeline-based animation controls with play/pause/stop functionality
+  - Comprehensive easing functions (linear, quad, cubic, back, bounce)
+  - Animation presets (fadeIn, bounceIn, slideIn, elastic, pulse)
+  - Global animation functions available in sketches (animateTime, animateFrame, etc)
+- **Performance & Optimization**:
+  - WebGL renderer optimization with high-performance settings and frame rate limiting
+  - Intelligent lazy loading with preloading based on user interaction patterns
+  - Virtual scrolling for project browser when >20 projects
+  - Reduced FPS monitoring overhead and enhanced memory management
+- **Advanced Parameter Controls**:
+  - Enhanced parameter system with vector2, vector3, and range parameter types
+  - 16-color palette picker for color parameters
+  - Vector coordinate inputs with labeled X/Y/Z fields
+  - Parameter parsing extended to support new @param comment types
+- **Code Editor Enhancements**:
+  - 100+ custom completions for p5.js and Three.js functions
+  - Live error detection with squiggles and contextual warnings
+  - Quick fixes for common coding issues (semicolons, THREE. prefixes)
+  - Enhanced TypeScript definitions and hover documentation
+- **Bug Fixes**:
+  - Fixed parameter slider flickering by optimizing render cycles
+  - Resolved infinite re-render loops in parameter updates
+  - Improved renderer performance with frame rate capping
 
 ### Phase 3: User Experience Enhancement (v1.3.0)
 - **Better Project Management**:

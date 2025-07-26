@@ -86,7 +86,7 @@ export const P5Renderer: React.FC<P5RendererProps> = ({
         p5InstanceRef.current = null;
       }
     };
-  }, [createSketch]);
+  }, [createSketch, onError]);
 
   // Handle resize
   useEffect(() => {

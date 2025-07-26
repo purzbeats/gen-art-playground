@@ -16,6 +16,7 @@ export interface Project {
   code: string;
   seed: string;
   parameters: ProjectParameter[];
+  thumbnail?: string;
   createdAt: Date;
   updatedAt: Date;
 }

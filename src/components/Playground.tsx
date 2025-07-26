@@ -7,6 +7,12 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ParameterPanel } from './ParameterPanel';
 import { ExportPanel } from './ExportPanel';
 import { TemplateBrowser } from './TemplateBrowser';
+import { CreateProjectModal } from './CreateProjectModal';
+import { ProjectBrowser } from './ProjectBrowser';
+import { LoadingSpinner } from './ui/LoadingSpinner';
+import { captureThumbnail } from '../utils/thumbnailUtils';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useToast } from '../contexts/ToastContext';
 import * as THREE from 'three';
 
 // Lazy load heavy components
@@ -17,9 +23,14 @@ const ThreeRenderer = lazy(() => import('./renderers/ThreeRenderer').then(module
 // Import RNG functions and context
 import { createRNGExecutionContext } from '../utils/rngHelpers';
 import { injectParametersIntoCode } from '../utils/parameterParser';
+import { formatError } from '../utils/errorUtils';
 
 export const Playground: React.FC = () => {
   const [isTemplateBrowserOpen, setIsTemplateBrowserOpen] = useState(false);
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isProjectBrowserOpen, setIsProjectBrowserOpen] = useState(false);
+  const [, setIsExportPanelOpen] = useState(false);
+  const { showToast } = useToast();
   const {
     currentProject,
     projects,
@@ -27,7 +38,6 @@ export const Playground: React.FC = () => {
     isCodeEditorOpen,
     isParameterPanelOpen,
     currentError,
-    createProject,
     loadProject,
     updateCode,
     updateSeed,
@@ -36,13 +46,43 @@ export const Playground: React.FC = () => {
     toggleParameterPanel,
     updateRendererConfig,
     setError,
-    importFromURL
+    importFromURL,
+    updateProject
   } = useProjectStore();
 
   // Check for URL imports on component mount
   useEffect(() => {
     importFromURL();
   }, [importFromURL]);
+
+  // Capture thumbnail on render
+  useEffect(() => {
+    if (!currentProject) return;
+    
+    const captureTimer = setTimeout(async () => {
+      const thumbnail = await captureThumbnail();
+      if (thumbnail) {
+        updateProject({ thumbnail });
+      }
+    }, 2000); // Wait 2 seconds after render
+
+    return () => clearTimeout(captureTimer);
+  }, [currentProject?.seed, currentProject?.parameters, updateProject]);
+
+  // Setup keyboard shortcuts
+  useKeyboardShortcuts({
+    onNewProject: () => setIsCreateProjectModalOpen(true),
+    onOpenProjects: () => setIsProjectBrowserOpen(true),
+    onSave: () => {
+      if (currentProject) {
+        showToast('Project saved', 'success');
+      }
+    },
+    onExport: () => setIsExportPanelOpen(true),
+    onFormat: () => {
+      showToast('Code formatting coming soon', 'info');
+    }
+  });
 
   // Compile user code safely
   const compiledSketch = useMemo(() => {
@@ -93,22 +133,16 @@ export const Playground: React.FC = () => {
       }
     } catch (error) {
       console.error('Code compilation error:', error);
-      setError(`Code Error: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error 
+        ? formatError(error, currentProject.code)
+        : String(error);
+      setError(`Code Error:\n${errorMessage}`);
       return null;
     }
   }, [currentProject, setError]);
 
   const handleCreateProject = () => {
-    const name = prompt('Project name:');
-    if (!name) return;
-    
-    const type = prompt('Project type (p5/three):') as 'p5' | 'three';
-    if (type !== 'p5' && type !== 'three') {
-      alert('Invalid project type. Please enter "p5" or "three"');
-      return;
-    }
-    
-    createProject(name, type);
+    setIsCreateProjectModalOpen(true);
   };
 
   return (
@@ -121,6 +155,9 @@ export const Playground: React.FC = () => {
           <div className="flex items-center gap-4">
             <Button onClick={handleCreateProject} size="sm">
               New Project
+            </Button>
+            <Button onClick={() => setIsProjectBrowserOpen(true)} variant="secondary" size="sm">
+              Projects
             </Button>
             <Button onClick={() => setIsTemplateBrowserOpen(true)} variant="secondary" size="sm">
               Templates
@@ -158,7 +195,7 @@ export const Playground: React.FC = () => {
       {/* Error display */}
       {currentError && (
         <div className="bg-red-50 border-l-4 border-red-400 p-4">
-          <p className="text-red-700">{currentError}</p>
+          <pre className="text-red-700 font-mono text-sm whitespace-pre-wrap">{currentError}</pre>
         </div>
       )}
 
@@ -172,7 +209,7 @@ export const Playground: React.FC = () => {
             </div>
             <div className="flex-1">
               <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-gray-500">Failed to load editor</div>}>
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">Loading editor...</div>}>
+                <Suspense fallback={<div className="flex items-center justify-center h-full"><LoadingSpinner message="Loading editor..." /></div>}>
                   <Editor
                     height="100%"
                     defaultLanguage="javascript"
@@ -224,7 +261,7 @@ export const Playground: React.FC = () => {
                 fallback={<div className="text-center text-red-500">Failed to load renderer</div>}
                 onError={(error) => setError(`Renderer Error: ${error.message}`)}
               >
-                <Suspense fallback={<div className="text-center text-gray-500">Loading renderer...</div>}>
+                <Suspense fallback={<div className="flex items-center justify-center h-full"><LoadingSpinner message="Loading renderer..." /></div>}>
                   {currentProject.type === 'p5' ? (
                     <P5Renderer
                       sketch={compiledSketch}
@@ -301,6 +338,18 @@ export const Playground: React.FC = () => {
       <TemplateBrowser
         isOpen={isTemplateBrowserOpen}
         onClose={() => setIsTemplateBrowserOpen(false)}
+      />
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+      />
+
+      {/* Project Browser */}
+      <ProjectBrowser
+        isOpen={isProjectBrowserOpen}
+        onClose={() => setIsProjectBrowserOpen(false)}
       />
     </div>
   );

@@ -1,34 +1,18 @@
-import React, { useMemo } from 'react';
-import Editor from '@monaco-editor/react';
+import React, { useMemo, lazy, Suspense } from 'react';
 import { useProjectStore } from '../stores/useProjectStore';
-import { P5Renderer } from './renderers/P5Renderer';
-import { ThreeRenderer } from './renderers/ThreeRenderer';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
+import { ErrorBoundary } from './ErrorBoundary';
 import * as THREE from 'three';
 
-// Import our seeded random functions into global scope for user code
-import { random, randomRange, randomInt, choice, shuffle } from '../utils/seededRNG';
+// Lazy load heavy components
+const Editor = lazy(() => import('@monaco-editor/react'));
+const P5Renderer = lazy(() => import('./renderers/P5Renderer').then(module => ({ default: module.P5Renderer })));
+const ThreeRenderer = lazy(() => import('./renderers/ThreeRenderer').then(module => ({ default: module.ThreeRenderer })));
 
-declare global {
-  interface Window {
-    random: typeof random;
-    randomRange: typeof randomRange;
-    randomInt: typeof randomInt;
-    choice: typeof choice;
-    shuffle: typeof shuffle;
-    THREE: typeof THREE;
-  }
-}
-
-// Make functions available globally
-window.random = random;
-window.randomRange = randomRange;
-window.randomInt = randomInt;
-window.choice = choice;
-window.shuffle = shuffle;
-window.THREE = THREE;
+// Import RNG functions and context
+import { createRNGExecutionContext } from '../utils/rngHelpers';
 
 export const Playground: React.FC = () => {
   const {
@@ -56,6 +40,9 @@ export const Playground: React.FC = () => {
     try {
       setError(null);
       
+      // Get RNG functions for current seed
+      const rngContext = createRNGExecutionContext(currentProject.seed);
+      
       if (currentProject.type === 'p5') {
         // For p5.js, we need to create a function that sets up the sketch
         const wrappedCode = `
@@ -72,7 +59,7 @@ export const Playground: React.FC = () => {
         `;
         
         return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', wrappedCode)(
-          random, randomRange, randomInt, choice, shuffle
+          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle
         );
       } else {
         // For three.js, we return the setup function directly
@@ -87,7 +74,7 @@ export const Playground: React.FC = () => {
         `;
         
         return new Function('random', 'randomRange', 'randomInt', 'choice', 'shuffle', 'THREE', wrappedCode)(
-          random, randomRange, randomInt, choice, shuffle, THREE
+          rngContext.random, rngContext.randomRange, rngContext.randomInt, rngContext.choice, rngContext.shuffle, THREE
         );
       }
     } catch (error) {
@@ -95,7 +82,7 @@ export const Playground: React.FC = () => {
       setError(`Code Error: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
-  }, [currentProject?.code, currentProject?.type, setError]);
+  }, [currentProject, setError]);
 
   const handleCreateProject = () => {
     const name = prompt('Project name:');
@@ -167,21 +154,25 @@ export const Playground: React.FC = () => {
               <h2 className="font-medium text-gray-900">Code Editor</h2>
             </div>
             <div className="flex-1">
-              <Editor
-                height="100%"
-                defaultLanguage="javascript"
-                value={currentProject.code}
-                onChange={(value) => value && updateCode(value)}
-                theme="vs-light"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbers: 'on',
-                  roundedSelection: false,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true
-                }}
-              />
+              <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-gray-500">Failed to load editor</div>}>
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">Loading editor...</div>}>
+                  <Editor
+                    height="100%"
+                    defaultLanguage="javascript"
+                    value={currentProject.code}
+                    onChange={(value) => value && updateCode(value)}
+                    theme="vs-light"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      roundedSelection: false,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         )}
@@ -210,21 +201,28 @@ export const Playground: React.FC = () => {
           
           <div className="flex-1 flex items-center justify-center bg-white">
             {currentProject && compiledSketch ? (
-              currentProject.type === 'p5' ? (
-                <P5Renderer
-                  sketch={compiledSketch}
-                  config={rendererConfig}
-                  seed={currentProject.seed}
-                  onError={(error) => setError(`Render Error: ${error.message}`)}
-                />
-              ) : (
-                <ThreeRenderer
-                  sketch={compiledSketch}
-                  config={rendererConfig}
-                  seed={currentProject.seed}
-                  onError={(error) => setError(`Render Error: ${error.message}`)}
-                />
-              )
+              <ErrorBoundary 
+                fallback={<div className="text-center text-red-500">Failed to load renderer</div>}
+                onError={(error) => setError(`Renderer Error: ${error.message}`)}
+              >
+                <Suspense fallback={<div className="text-center text-gray-500">Loading renderer...</div>}>
+                  {currentProject.type === 'p5' ? (
+                    <P5Renderer
+                      sketch={compiledSketch}
+                      config={rendererConfig}
+                      seed={currentProject.seed}
+                      onError={(error) => setError(`Render Error: ${error.message}`)}
+                    />
+                  ) : (
+                    <ThreeRenderer
+                      sketch={compiledSketch}
+                      config={rendererConfig}
+                      seed={currentProject.seed}
+                      onError={(error) => setError(`Render Error: ${error.message}`)}
+                    />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
             ) : (
               <div className="text-center text-gray-500">
                 {!currentProject ? (

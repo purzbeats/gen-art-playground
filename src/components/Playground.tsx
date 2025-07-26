@@ -1,9 +1,12 @@
-import React, { useMemo, lazy, Suspense } from 'react';
+import React, { useMemo, lazy, Suspense, useEffect, useState } from 'react';
 import { useProjectStore } from '../stores/useProjectStore';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ParameterPanel } from './ParameterPanel';
+import { ExportPanel } from './ExportPanel';
+import { TemplateBrowser } from './TemplateBrowser';
 import * as THREE from 'three';
 
 // Lazy load heavy components
@@ -13,8 +16,10 @@ const ThreeRenderer = lazy(() => import('./renderers/ThreeRenderer').then(module
 
 // Import RNG functions and context
 import { createRNGExecutionContext } from '../utils/rngHelpers';
+import { injectParametersIntoCode } from '../utils/parameterParser';
 
 export const Playground: React.FC = () => {
+  const [isTemplateBrowserOpen, setIsTemplateBrowserOpen] = useState(false);
   const {
     currentProject,
     projects,
@@ -30,8 +35,14 @@ export const Playground: React.FC = () => {
     toggleCodeEditor,
     toggleParameterPanel,
     updateRendererConfig,
-    setError
+    setError,
+    importFromURL
   } = useProjectStore();
+
+  // Check for URL imports on component mount
+  useEffect(() => {
+    importFromURL();
+  }, [importFromURL]);
 
   // Compile user code safely
   const compiledSketch = useMemo(() => {
@@ -43,10 +54,13 @@ export const Playground: React.FC = () => {
       // Get RNG functions for current seed
       const rngContext = createRNGExecutionContext(currentProject.seed);
       
+      // Inject parameter values into code
+      const codeWithParameters = injectParametersIntoCode(currentProject.code, currentProject.parameters);
+      
       if (currentProject.type === 'p5') {
         // For p5.js, we need to create a function that sets up the sketch
         const wrappedCode = `
-          ${currentProject.code}
+          ${codeWithParameters}
           
           return function(p) {
             if (typeof setup === 'function') {
@@ -64,7 +78,7 @@ export const Playground: React.FC = () => {
       } else {
         // For three.js, we return the setup function directly
         const wrappedCode = `
-          ${currentProject.code}
+          ${codeWithParameters}
           
           if (typeof setup === 'function') {
             return setup;
@@ -107,6 +121,9 @@ export const Playground: React.FC = () => {
           <div className="flex items-center gap-4">
             <Button onClick={handleCreateProject} size="sm">
               New Project
+            </Button>
+            <Button onClick={() => setIsTemplateBrowserOpen(true)} variant="secondary" size="sm">
+              Templates
             </Button>
             
             {currentProject && (
@@ -185,7 +202,9 @@ export const Playground: React.FC = () => {
             </h2>
             
             {currentProject && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 relative">
+                <ParameterPanel />
+                <ExportPanel />
                 <Input
                   value={currentProject.seed}
                   onChange={(e) => updateSeed(e.target.value)}
@@ -277,6 +296,12 @@ export const Playground: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Template Browser */}
+      <TemplateBrowser
+        isOpen={isTemplateBrowserOpen}
+        onClose={() => setIsTemplateBrowserOpen(false)}
+      />
     </div>
   );
 };

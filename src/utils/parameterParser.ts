@@ -1,0 +1,133 @@
+import type { ProjectParameter } from '../types';
+
+export interface ParsedParameter {
+  name: string;
+  type: 'number' | 'boolean' | 'color' | 'select';
+  defaultValue: number | boolean | string;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+  description?: string;
+}
+
+/**
+ * Parses @param comments from code to extract parameter definitions
+ * 
+ * Supported formats:
+ * @param {number} name - description [min=0, max=100, step=1]
+ * @param {boolean} name - description
+ * @param {color} name - description [default=#ff0000]
+ * @param {select} name - description [options=red,blue,green]
+ */
+export function parseParametersFromCode(code: string): ParsedParameter[] {
+  const paramRegex = /@param\s+\{(number|boolean|color|select)\}\s+(\w+)(?:\s*-\s*([^[\n]+))?(?:\s*\[([^\]]+)\])?/g;
+  const parameters: ParsedParameter[] = [];
+  
+  let match;
+  while ((match = paramRegex.exec(code)) !== null) {
+    const [, type, name, description, options] = match;
+    
+    const param: ParsedParameter = {
+      name,
+      type: type as 'number' | 'boolean' | 'color' | 'select',
+      defaultValue: getDefaultValue(type as 'number' | 'boolean' | 'color' | 'select'),
+      description: description?.trim()
+    };
+    
+    // Parse options like [min=0, max=100, step=1] or [options=red,blue,green]
+    if (options) {
+      parseParameterOptions(param, options);
+    }
+    
+    parameters.push(param);
+  }
+  
+  return parameters;
+}
+
+function getDefaultValue(type: string): number | boolean | string {
+  switch (type) {
+    case 'number':
+      return 0;
+    case 'boolean':
+      return false;
+    case 'color':
+      return '#000000';
+    case 'select':
+      return '';
+    default:
+      return 0;
+  }
+}
+
+function parseParameterOptions(param: ParsedParameter, optionsString: string) {
+  const optionPairs = optionsString.split(',').map(s => s.trim());
+  
+  for (const pair of optionPairs) {
+    const [key, value] = pair.split('=').map(s => s.trim());
+    
+    switch (key) {
+      case 'min':
+        param.min = parseFloat(value);
+        break;
+      case 'max':
+        param.max = parseFloat(value);
+        break;
+      case 'step':
+        param.step = parseFloat(value);
+        break;
+      case 'default':
+        if (param.type === 'number') {
+          param.defaultValue = parseFloat(value);
+        } else if (param.type === 'boolean') {
+          param.defaultValue = value.toLowerCase() === 'true';
+        } else {
+          param.defaultValue = value;
+        }
+        break;
+      case 'options':
+        param.options = value.split(',').map(s => s.trim());
+        if (param.type === 'select' && param.options.length > 0) {
+          param.defaultValue = param.options[0];
+        }
+        break;
+    }
+  }
+}
+
+/**
+ * Converts parsed parameters to ProjectParameter format
+ */
+export function convertToProjectParameters(parsedParams: ParsedParameter[]): ProjectParameter[] {
+  return parsedParams.map(param => ({
+    name: param.name,
+    type: param.type,
+    value: param.defaultValue,
+    min: param.min,
+    max: param.max,
+    step: param.step,
+    options: param.options,
+    description: param.description
+  }));
+}
+
+/**
+ * Updates code with current parameter values by replacing variable declarations
+ */
+export function injectParametersIntoCode(code: string, parameters: ProjectParameter[]): string {
+  let updatedCode = code;
+  
+  // For each parameter, find and replace const/let/var declarations
+  parameters.forEach(param => {
+    const value = param.type === 'color' || param.type === 'select' 
+      ? `"${param.value}"` 
+      : param.value;
+    
+    // Match variable declarations like: const paramName = anything;
+    const varRegex = new RegExp(`((?:const|let|var)\\s+${param.name}\\s*=\\s*)[^;\\n]+`, 'g');
+    updatedCode = updatedCode.replace(varRegex, `$1${value}`);
+  });
+  
+  return updatedCode;
+}

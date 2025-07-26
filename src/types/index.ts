@@ -20,10 +20,12 @@ export interface Project {
   updatedAt: Date;
 }
 
+export type ParameterValue = number | boolean | string;
+
 export interface ProjectParameter {
   name: string;
   type: 'number' | 'boolean' | 'color' | 'select';
-  value: any;
+  value: ParameterValue;
   min?: number;
   max?: number;
   step?: number;

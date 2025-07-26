@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Project, ProjectParameter, RendererConfig } from '../types';
+import type { Project, ProjectParameter, RendererConfig, ParameterValue } from '../types';
 import { SeededRandomGenerator } from '../utils/seededRNG';
 
 interface ProjectStore {
@@ -27,7 +27,7 @@ interface ProjectStore {
   updateCode: (code: string) => void;
   updateSeed: (seed: string) => void;
   generateNewSeed: () => void;
-  updateParameter: (name: string, value: any) => void;
+  updateParameter: (name: string, value: ParameterValue) => void;
   addParameter: (parameter: ProjectParameter) => void;
   removeParameter: (name: string) => void;
   
@@ -193,7 +193,7 @@ export const useProjectStore = create<ProjectStore>()(
         get().updateProject({ seed: newSeed });
       },
 
-      updateParameter: (name: string, value: any) => {
+      updateParameter: (name: string, value: ParameterValue) => {
         const { currentProject } = get();
         if (!currentProject) return;
 

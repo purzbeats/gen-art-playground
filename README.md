@@ -154,6 +154,28 @@ npm run preview
 
 ## Changelog
 
+### Phase 2: Core Feature Implementation (v1.2.0)
+- **Parameter System**: 
+  - Parse @param comments from code to create interactive controls
+  - Support for number (with sliders), boolean, color, and select parameters
+  - Real-time parameter updates that instantly reflect in artwork
+  - Auto-sync between code comments and UI controls
+- **Export Functionality**:
+  - PNG image export with current canvas size
+  - JSON project export with all code and settings
+  - Shareable URL generation with embedded project data
+  - Automatic URL import on page load
+- **Template System**:
+  - Built-in template library with categorized examples
+  - Template browser with search and filtering
+  - Quick project creation from templates
+  - Templates for both p5.js and Three.js
+- **UI Improvements**:
+  - Added Parameter Panel for live control manipulation
+  - Added Export Panel with multiple format options
+  - Enhanced default templates with parameter examples
+  - Added ghost button variant for better UI consistency
+
 ### Phase 1: Code Quality & Foundation (v1.1.0)
 - **Fixed TypeScript Issues**: Replaced `any` types with proper `ParameterValue` union type
 - **Resolved React Hook Dependencies**: Fixed missing dependencies in useEffect hooks

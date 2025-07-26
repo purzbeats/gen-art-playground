@@ -152,6 +152,18 @@ npm run preview
 - Advanced parameter controls (sliders, color pickers)
 - Plugin system for custom utilities
 
+## Changelog
+
+### Phase 1: Code Quality & Foundation (v1.1.0)
+- **Fixed TypeScript Issues**: Replaced `any` types with proper `ParameterValue` union type
+- **Resolved React Hook Dependencies**: Fixed missing dependencies in useEffect hooks
+- **Added Error Boundaries**: Implemented comprehensive error handling with ErrorBoundary component
+- **Bundle Optimization**: Reduced main bundle from 1.9MB to 191KB with code splitting
+- **Architecture Improvements**: 
+  - Removed global window pollution with RNG context system
+  - Added lazy loading for Monaco Editor and renderers
+  - Implemented proper cleanup patterns with Suspense
+
 ## Contributing
 
 This is a playground project perfect for experimenting with generative art concepts. Feel free to extend and modify as needed!
